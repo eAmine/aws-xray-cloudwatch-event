@@ -11,13 +11,17 @@ See the License for the specific language governing permissions and limitations 
 import os
 import json
 
-appname = raw_input("Enter a unique name for your app {pattern:^[a-z0-9]+$}:")
+appname = input("Enter a unique name for your app {pattern:^[a-z0-9]+$}:")
 
 print("Your appname:"+appname+" will be used for naming your CloudFormation stack, public s3 bucket and as a prefix as a prefix to identify all the Lambda functions and IAM Roles associated with your app")
 
 print("The region should be the same as your service running in X-Ray. If your service runs in multiple regions then you should have multiple instances of this sample app running in each region.")
 
-sampleappregion = raw_input("Enter the aws region where you would like this sample app to be deployed. (Default: us-west-2): ") or "us-west-2"
+sampleappregion = input("Enter the aws region where you would like this sample app to be deployed. (Default: us-west-2): ") or "us-west-2"
+
+lambdacodebucket = input("Enter a unique name for bucket for storing the Lambda function archive bucket {pattern:^[a-z0-9]+$}:")
+
+print("Your bucket:"+lambdacodebucket+" will be used for storing the Lambda function source code Archive")
 
 # Setting time to analyze servicemap. Default set to 6 hours if not found in xraycloudwatcheventfile.json.
 xraycloudwatcheventfile = open('xraycloudwatchevent.json', 'r').read()
@@ -35,18 +39,18 @@ os.system(zipcommand)
 
 # Create s3 bucket to store the Archive
 print("Creating S3 bucket that will have the Archive.zip file for AWS Lambda")
-s3createcommand = "aws s3api create-bucket --create-bucket-configuration LocationConstraint=%s --acl private --bucket lambdacodexcw" % sampleappregion
+s3createcommand = "aws s3api create-bucket --create-bucket-configuration LocationConstraint=%s --acl private --bucket %s" % (sampleappregion,lambdacodebucket)
 os.system(s3createcommand)
 
 # Upload Archive.zip to s3 bucket
 print("Uploading Archive.zip to the S3 bucket")
-s3uploadcommand = "aws s3 cp Archive.zip s3://lambdacodexcw"
+s3uploadcommand = "aws s3 cp Archive.zip s3://%s" % lambdacodebucket
 os.system(s3uploadcommand)
 
 # Deploy resources in a CloudFormation stack
 periodcwalarm=analyzeservicemapminutes*60 # Converting analyzeservicemapminutes from minutes to seconds
 print("Deploying resources from the Cloudformation template")
-cfcommand = "aws --region %s cloudformation deploy --template-file xraycloudwatchevent.template --stack-name %s --parameter-overrides appname=%s analyzeservicemapminutes=%d periodcwalarm=%d evaluationperiodforcwalarm=%d --capabilities CAPABILITY_NAMED_IAM" % (sampleappregion, appname, appname, analyzeservicemapminutes,periodcwalarm,evaluationperiodforcwalarm)
+cfcommand = "aws --region %s cloudformation deploy --template-file xraycloudwatchevent.template --stack-name %s --parameter-overrides appname=%s lambdaCodeBucket=%s analyzeservicemapminutes=%d periodcwalarm=%d evaluationperiodforcwalarm=%d --capabilities CAPABILITY_NAMED_IAM" % (sampleappregion, appname, appname, lambdacodebucket, analyzeservicemapminutes,periodcwalarm,evaluationperiodforcwalarm)
 print(cfcommand)
 os.system(cfcommand)
 
@@ -58,7 +62,7 @@ s3uploadcommand = "aws s3 cp xraycloudwatchevent.json s3://"+appname+"-xraycloud
 os.system(s3uploadcommand)
 
 # Delete bucket that has the lambda code
-deletes3lambdabucket = "aws s3 rb s3://lambdacodexcw --force"
+deletes3lambdabucket = "aws s3 rb s3://%s --force" % lambdacodebucket
 os.system(deletes3lambdabucket)
 
 print("Deleted temporary s3 bucket")
